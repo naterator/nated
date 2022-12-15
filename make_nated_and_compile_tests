@@ -1,0 +1,17 @@
+#!/bin/sh
+
+make
+cd bin
+java -jar nated.jar intdiv.d > intdiv.asm
+echo "intdiv.asm created."
+echo
+echo
+echo
+java -jar nated.jar ack.d > ack.asm
+echo "ack.asm created."
+echo
+echo
+echo
+java -jar nated.jar count.d > count.asm
+echo "count.asm created."
+echo

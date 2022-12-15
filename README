@@ -1,0 +1,222 @@
+README for
+Nate Schmoll's D Translator for MASM >=386
+by Nate Schmoll
+
+created 2007-08-07
+updated 2007-08-11
+
+i. Package Contents
+1. Building
+2. Using
+3. Extending
+4. Neat Features and Functionality
+5. Final Words
+
+===========================================================================
+i. PACKAGE CONTENTS
+===========================================================================
+bin_only/ - quick and dirty access to a working version of the compiler
+src_build/ - all necessary source & build directories, with Makefile
+tests_with_output/ - textual D programs with compiler output
+README - this file
+
+If you're looking for a majority of the code involved for this compiler,
+you'll probably find it in this directory:
+
+    src_build/src/ast_classes/src/
+
+===========================================================================
+1. BUILDING
+===========================================================================
+This D translator is pretty simple to build. An included Makefile performs
+the dirty work and packages all the necessary dependencies into a JAR file.
+To build, you must have "make" installed, so this should work naturally
+on any normal UNIX-like operating system. Follow these steps:
+
+    cd src_build
+    make
+    
+A binary JAR copy ("nated.jar") now exists in src_build/bin/. Enjoy!
+
+===========================================================================
+2. USING (it's not healthy)
+===========================================================================
+The basic command for using the compiler is:
+
+    java -jar nated.jar
+
+This tells Java(R)(tm)(c) to open the JAR file and execute the Main-Class
+attribute specified in the JAR manifest. Running "nated.jar" with zero
+options will display the following really helpful information:
+
+    $ java -jar nated.jar
+
+    Nate Schmoll's D Translator for MASM >=386
+
+    Usage: java -jar nated.jar [-s] <source_file> [<Visitor>]
+
+    Options:
+       -s   Show function and local symbol tables (invalid when
+            specifying a visitor)
+
+    Code is output to stdout; all other output is directed to
+    stderr. With this in mind, you can redirect the console
+    assembly output to a file. For example:
+
+       java -jar nated.jar sample.d > sample.asm
+
+    Available Visitor Classes:
+    Phase1CompileVisitor
+    Phase2CompileVisitor
+    Phase3CompileVisitor
+    Phase4CompileVisitor
+    Phase4PrintVisitor
+    Phase5CompileVisitor
+    PrintCodeVisitor
+    PrintTreeVisitor
+
+    $
+
+The most basic useful command is passing a D source file to the compiler:
+
+    java -jar nated.jar good.d
+
+To compile code and output it directly to an assembly file:
+
+    java -jar nated.jar good.d > good.asm
+
+To view symbol tables in the output, add the "-s" switch:
+
+    java -jar nated.jar -s good.d
+    
+You can also force the compiler to not perform regular compilation, but 
+instead run a custom class which implements the Visitor interface:
+
+    java -jar nated.jar good.d PrintCodeVisitor
+
+===========================================================================
+3. EXTENDING
+===========================================================================
+To extend the compiler, you can write a class which implements the
+"Visitor" interface. With this method of extension, you don't need access
+to the source code of the compiler.
+
+Once you've created a ".class" file of your class, add it to the root of
+the JAR file. It will immediately become available for use as a parameter
+with the compiler. Now THAT is *nifty*!
+
+The class must implement a constructor in the following fashion:
+
+    public YourVisitor(Compiler c)
+    {
+        c.head.acceptMe(this);
+    }
+
+This constructor calls the state object (Compiler), find's the head ASTNode
+object, and calls acceptance of YourVisitor onto the head object.
+
+===========================================================================
+4. NEAT FEATURES AND FUNCTIONALITY
+===========================================================================
+-- Code Output Smarts --
+Code (ASM) is output to stdout and all other output is directed to stderr.
+This means you can redirect the console output to a filename to easily
+put the output ASM code into a file for easy use. All other output is
+displayed to stderr, which is generally still the user's terminal.
+
+-- Forces main() to Be First --
+No matter what order main() appears in the inputted code or the abstract
+syntax tree, main() will always be outputted first and renamed to
+"asm_main" in the final output. That's some intelligent code!
+
+-- Clean ASM Code Output --
+The assembly outputted from this translator is nearly guaranteed to fit in
+a 76-character-wide terminal. Also, nearly every line is commented,
+and statements are displayed prominently above the block that represents
+them. This makes it easy to see *which* part of the code is doing *what*.
+
+There's even a list of function parameters and local variables at the
+beginning of each function!
+
+-- Label Names Relate to Their Purpose --
+Each label can identify its purpose in the code. For example, "f_" is
+prepended to all function names, "if_" is prepended to all "if"
+statements, etc.
+
+-- "SymbolTable" and "SymbolTableNode" Classes --
+The easiest way for me to think about all the symbol tables used in the
+compiler was to create a generic SymbolTable structure which included
+functionality appropriate to the context of symbol tables.
+
+These two classes were used for both the Function Symbol Table and the
+Local Symbol Tables. I stored the parameter definitions in the
+FunctiondefNode objects for each function. Since the parameters really
+didn't have anything to do with the symbol table, once they were added,
+I didn't think it was appropriate to store those objects there.
+
+Since both uses of the SymbolTable class were equal, I didn't need
+to extend it for any particular situation.
+
+I'm very happy with the use of this data structure and how it all turned
+out.
+
+-- State Data Stored in "Compiler" Class --
+Since there are several phases for the compilation, there needed to be
+a simple way of transporting compiler state information between the
+different Visitor classes.
+
+I created a "Compiler" class which has common information. "Main"
+generates the object and then it gets passed to all the
+Phase*CompileVisitor classes.
+
+-- Automatically Loads Next Phase --
+There are currently three phases during compilation:
+
+    Phase1CompileVisitor - analyzes functions, parameters, and local
+                           variables
+    Phase2CompileVisitor - checks type information
+    Phase3CompileVisitor - checks for main() and calculates offsets of
+                           variables
+    Phase4CompileVisitor - generates assembly instructions and adds
+                           useful comments
+    Phase5CompileVisitor - final clean-up reporting with error messages
+
+If you were to create another class named "Phase6CompileVisitor", which
+extends the "Visitor" interface, it would automatically be executed
+during the compile.
+
+The common "Compile" object just keeps executing the next phase class
+until there are none remaining. This method makes it easy to extend the
+current compiler and add additional functionality.
+
+-- In-depth Type Checking --
+Most ASTNode-derived classes have an integer variable called "dataType".
+The "DataType" class stores different allowed data types as constants,
+which are eventually assigned to the different objects in the abstract
+syntax tree.
+
+Most major ASTNode-derived classes consider their "dataType" variable to
+contain the cumulative data type.  If there is any data type in the tree
+below it which does not equal all the others, DataType.UNKNOWN will be
+its "dataType" value.
+
+For example, if an undeclared variable "z" is used, it will automatically
+be added to the local symbol table and declared as type "DataType.UNKNOWN".
+
+-- Optional Symbol Table Output --
+You can view symbol table output during compile-time by simply adding the
+"-s" switch. I wanted easy access to the symbol table information for
+debugging purposes, but its output is lengthy, so I implemented this
+feature.
+
+===========================================================================
+4. FINAL WORDS
+===========================================================================
+I'm very happy with the use of Java for this project and the visitor
+pattern. This combination has greatly simplified the concepts behind the
+compiler, so this project is manageable by an inexperienced compiler
+writer...ME!
+
+Thanks,
+Nate Schmoll
+me @t nateschmoll.com

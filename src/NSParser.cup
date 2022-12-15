@@ -1,0 +1,299 @@
+// Nate Schmoll's D Translator for MASM >=386
+// Copyright (c) 2007, Nate Schmoll. All rights reserved.
+// This code may not be reused or reproduced without the 
+// explicit written consent of its author.
+
+/* D Parser, by Nate Schmoll */
+
+/* BUILT FOR CUP */
+
+import java_cup.runtime.*;
+
+/* Preliminaries to set up and use the scanner */
+/* Parser code to change the way the parser reports errors (include
+   line and column number of the error). */
+parser code {:
+    
+    /* Change the method report_error so it will display the line and
+       column of where the error occurred in the input as well as the
+       reason for the error which is passed into the method in the
+       String 'message'. */
+       
+       boolean pimpDisplay = true;
+    
+   public void report_error(String message, Object info) {
+       
+       if( pimpDisplay == true )
+       {
+           System.err.println("1 error was encountered during compilation:");
+           System.err.println("");
+           System.err.println("[Line,Col #]: [Description]");
+           pimpDisplay = false;
+       }
+        
+        String nl = System.getProperty("line.separator");
+   
+        /* Create a StringBuffer called 'm' with the string 'Error' in it. */
+        // StringBuffer m = new StringBuffer("Error");
+        StringBuffer m = new StringBuffer("");
+   
+        /* Check if the information passed to the method is the same
+           type as the type java_cup.runtime.Symbol. */ 
+        if (info instanceof java_cup.runtime.Symbol) {
+            /* Declare a java_cup.runtime.Symbol object 's' with the
+               information in the object info that is being typecasted
+               as a java_cup.runtime.Symbol object. */
+            java_cup.runtime.Symbol s = ((java_cup.runtime.Symbol) info);
+   
+            /* Check if the line number in the input is greater or
+               equal to zero. */
+            if (s.left >= 0) {                
+                /* Add to the end of the StringBuffer error message
+                   the line number of the error in the input. */
+                // m.append(" at line "+(s.left+1));   
+                m.append((s.left+1));
+                /* Check if the column number in the input is greater
+                   or equal to zero. */
+                if (s.right >= 0)                    
+                    /* Add to the end of the StringBuffer error message
+                       the column number of the error in the input. */
+                    // m.append(", column "+(s.right+1));
+                    m.append(","+(s.right+1));
+            }
+        }
+   
+        /* Add to the end of the StringBuffer error message created in
+           this method the message that was passed into this method. */
+        m.append(": "+message);
+   
+        /* Print the contents of the StringBuffer 'm', which contains
+           an error message, out on a line. */
+        System.err.println(m);
+    }
+   
+    /* Change the method report_fatal_error so when it reports a fatal
+       error it will display the line and column number of where the
+       fatal error occurred in the input as well as the reason for the
+       fatal error which is passed into the method in the object
+       'message' and then exit.*/
+    public void report_fatal_error(String message, Object info) {
+        report_error(message, info);
+        System.err.println("");
+        System.err.println("Exiting...");
+        System.err.println("");
+        System.exit(1);
+    }
+
+:};
+
+/*
+init with {: scanner.init();              :};
+scan with {: return scanner.next_token(); :};
+*/
+
+/* Terminals (tokens returned by the scanner) */
+terminal         ELSE, IF, INT, RETURN, WHILE, LPAREN, RPAREN, LBRACE, RBRACE,
+                 SEMICOLON, COMMA, EQEQ, EQ, NOT, PLUS, MINUS, MULT, GT;
+
+terminal java.lang.String ID;
+terminal java.lang.Integer INTLITERAL;
+
+/* Non-terminals */
+non terminal ProgramNode program;
+non terminal FunctiondefNode functiondef;
+non terminal ParameterNode parameters;
+non terminal ParameterNode parameter;
+non terminal DeclarationNode declarations;
+non terminal DeclarationNode declaration;
+non terminal StatementNode statements;
+non terminal StatementNode statement;
+non terminal BoolexpNode boolexp;
+non terminal RelexpNode relexp;
+non terminal ExpNode exp;
+non terminal TermNode term;
+non terminal FactorNode factor;
+non terminal ExpsNode exps;
+
+/* Precedences */
+precedence nonassoc ELSE;
+precedence nonassoc NOT;
+precedence left     EQ, GT;
+precedence left     PLUS, MINUS;
+precedence left     MULT;
+
+/* The grammar */
+start with program;
+
+program      ::= functiondef:f
+                 {:  f.line = fleft+1;
+                     RESULT = new ProgramNode( f );
+                     RESULT.line = fleft+1;
+                     :}
+                 | program:p functiondef:f
+                 {:  f.line = fleft+1;
+                     p.line = pleft+1;
+                     RESULT = new ProgramProgramNode( f, p );
+                     RESULT.line = pleft+1;
+                     :}
+                 ;
+functiondef  ::= INT ID:i LPAREN RPAREN LBRACE statements:ss RBRACE
+                 {:  ss.line = ssleft+1;
+                     RESULT = new IntFunctiondefNode( i, ss );
+                     :}
+                 | INT ID:i LPAREN parameters:ps RPAREN LBRACE statements:ss RBRACE
+                 {:  ps.line = psleft+1;
+                     ss.line = ssleft+1;
+                     RESULT = new ParametersIntFunctiondefNode( i, ps, ss );
+                     :}
+                 | INT ID:i LPAREN RPAREN LBRACE declarations:ds statements:ss RBRACE
+                 {:  ds.line = dsleft+1;
+                     ss.line = ssleft+1;
+                     RESULT = new DeclarationsIntFunctiondefNode( i, ds, ss );
+                     :}
+                 | INT ID:i LPAREN parameters:ps RPAREN LBRACE declarations:ds statements:ss RBRACE
+                 {:  ps.line = psleft+1;
+                     ds.line = dsleft+1;
+                     ss.line = ssleft+1;
+                     RESULT = new ParametersDeclarationsIntFunctiondefNode( i, ps, ds, ss );
+                     :}
+                 ;
+parameters   ::= parameters:ps COMMA parameter:p
+                 {:  ps.line = psleft+1;
+                     p.line = pleft+1;
+                     RESULT = new ParametersNode( ps, p );
+                     :}
+                 | parameter:p
+                 {:  p.line = pleft+1;
+                     RESULT = p;
+                     :}
+                 ;
+parameter    ::= INT ID:i
+                 {:  RESULT = new IntParameterNode( i );
+                     :}
+                 ;
+declarations ::= declaration:d
+                 {:  d.line = dleft+1;
+                     RESULT = d;
+                     :}
+                 | declarations:ds declaration:d
+                 {:  ds.line = dsleft+1;
+                     d.line = dleft+1;
+                     RESULT = new DeclarationsNode( ds, d );
+                     :}
+                 ;
+declaration  ::= INT ID:i SEMICOLON
+                 {:  RESULT = new IntDeclarationNode( i );
+                     :}
+                 ;
+statements   ::= statement:s
+                 {:  s.line = sleft+1;
+                     RESULT = s;
+                     :}
+                 | statements:ss statement:s
+                 {:  ss.line = ssleft+1;
+                     s.line = sleft+1;
+                     RESULT = new StatementsNode( ss, s );
+                     :}
+                 ;
+statement    ::= ID:i EQ exp:e SEMICOLON
+                 {:  e.line = eleft+1;
+                     RESULT = new SetvalueStatementNode( i, e );
+                     :}
+                 | RETURN exp:e SEMICOLON
+                 {:  e.line = eleft+1;
+                     RESULT = new ReturnStatementNode( e );
+                     :}
+                 | LBRACE statements:s RBRACE
+                 {:  s.line = sleft+1;
+                     RESULT = s;
+                     :}
+                 | IF LPAREN boolexp:b RPAREN statement:s
+                 {:  b.line = bleft+1;
+                     s.line = sleft+1;
+                     RESULT = new IfStatementNode( b, s );
+                     :}
+                 | IF LPAREN boolexp:b RPAREN statement:s1 ELSE statement:s2
+                 {:  b.line = bleft+1;
+                     s1.line = s1left+1;
+                     s2.line = s2left+1;
+                     RESULT = new IfelseStatementNode( b, s1, s2 );
+                     :}
+                 | WHILE LPAREN boolexp:b RPAREN statement:s
+                 {:  b.line = bleft+1;
+                     s.line = sleft+1;
+                     RESULT = new WhileStatementNode( b, s );
+                     :}
+                 ;
+boolexp      ::= relexp:a
+                 {:  a.line = aleft+1;
+                     RESULT = new BoolexpNode( a );
+                     :}
+                 | NOT LPAREN relexp:a RPAREN
+                 {:  a.line = aleft+1;
+                     RESULT = new NotBoolexpNode( a );
+                     :}
+                 ;
+relexp       ::= exp:a EQEQ exp:b
+                 {:  a.line = aleft+1;
+                     b.line = bleft+1;
+                     RESULT = new EqeqRelexpNode( a, b );
+                     :}
+                 | exp:a GT exp:b
+                 {:  a.line = aleft+1;
+                     b.line = bleft+1;
+                     RESULT = new GtRelexpNode( a, b );
+                     :}
+                 ;
+exp          ::= term:a
+                 {:  a.line = aleft+1;
+                     RESULT = new ExpNode( a );
+                     :}
+                 | exp:a PLUS term:b
+                 {:  a.line = aleft+1;
+                     b.line = bleft+1;
+                     RESULT = new PlusExpNode( a, b );
+                     :}
+                 | exp:a MINUS term:b
+                 {:  a.line = aleft+1;
+                     b.line = bleft+1;
+                     RESULT = new MinusExpNode( a, b );
+                     :}
+                 ;
+term         ::= factor:a
+                 {:  a.line = aleft+1;
+                     RESULT = new TermNode( a );
+                     :}
+                 | term:a MULT factor:b
+                 {:  a.line = aleft+1;
+                     b.line = bleft+1;
+                     RESULT = new MultTermNode( a, b );
+                     :}
+                 ;
+factor       ::= ID:i
+                 {:  RESULT = new IDFactorNode( i );
+                     :}
+                 | INTLITERAL:i
+                 {:  RESULT = new IntliteralFactorNode( i );
+                     :}
+                 | LPAREN exp:a RPAREN
+                 {:  a.line = aleft+1;
+                     RESULT = new ExpFactorNode( a );
+                     :}
+                 | ID:a LPAREN RPAREN
+                 {:  RESULT = new FunctionFactorNode( a );
+                     :}
+                 | ID:a LPAREN exps:b RPAREN
+                 {:  b.line = bleft+1;
+                     RESULT = new ExpsFunctionFactorNode( a, b );
+                     :}
+                 ;
+exps         ::= exp:a
+                 {:  a.line = aleft+1;
+                     RESULT = new ExpsNode( a );
+                     :}
+                 | exps:a COMMA exp:b
+                 {:  a.line = aleft+1;
+                     b.line = bleft+1;
+                     RESULT = new ExpsExpsNode( b, a );
+                     :}
+                 ;

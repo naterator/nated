@@ -1,0 +1,5 @@
+bin/*
+int/*
+*.class
+.DS_Store
+.*.swp
